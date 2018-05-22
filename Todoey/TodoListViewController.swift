@@ -15,7 +15,7 @@ import UIKit
 //
 class TodoListViewController: UITableViewController {
 
-    let itemArray = ["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
+    var itemArray = ["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
     override func viewDidLoad() {
         super.viewDidLoad()
     }
@@ -45,16 +45,49 @@ class TodoListViewController: UITableViewController {
         // Le concept d'accessory pour ajouter une petite icone, ici une check
         let accessoryType = tableView.cellForRow(at: indexPath)?.accessoryType
         switch  accessoryType {
-            case .checkmark?: tableView.cellForRow(at: indexPath)?.accessoryType = .none
+        case .checkmark?: tableView.cellForRow(at: indexPath)?.accessoryType = .none
             default: tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
         }
-        //tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
-        
         
         // Juste pour rendre l'affichage plus sympa
-        // Quand on sélectionne la cell elle prend une autre couleur mais seulement un instant (flash)
+        // Quand on sélectionne la cell elle prend une autre couleur
+        // mais seulement un instant (flash)
         // et retourne ensuite à la couleur originale
         tableView.deselectRow(at: indexPath, animated: true)
+    }
+    
+    //MARK - Bar Button Add
+    @IBAction func addItemPressed(_ sender: UIBarButtonItem) {
+        var textField = UITextField()
+        // On crée un PopUp pour pouvoir entrer le text du nouveau Item
+        let alert = UIAlertController(title: "Add new Item to the Todo List", message: "", preferredStyle: .alert)
+        
+        // Le handler qui sera exécuté (tout du moins la clsure)
+        // quand on presse le bouton "Add Item" dans le Popup
+        let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
+            print(textField.text!)
+            // On ajoute ici le nouvel item dans la liste
+            self.itemArray.append(textField.text!)
+            // et on reload pour le faire apparaitre autrement ça ne marche pas
+            self.tableView.reloadData()
+        }
+        
+        // On ajoute le TextField dans l'alert qui nous permettera
+        // d'entrée le titre du nouvel item
+        alert.addTextField { (alertTextfield) in
+            // Le placeholder est le texte grisé qui apparait dans le textfield
+            // par défaut
+            alertTextfield.placeholder = "Item?"
+            // Si on ne sauve pas cette référence alors
+            // elle est perdu à la sortie de la closure
+            textField = alertTextfield
+        }
+        
+        // Onenregistre l'action dans l'alert
+        alert.addAction(action)
+        
+        // On affiche le Popu avec la fonction present()
+        present(alert, animated: true, completion: nil)
     }
 }
 
