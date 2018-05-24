@@ -16,8 +16,20 @@ import UIKit
 class TodoListViewController: UITableViewController {
 
     var itemArray = ["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
+    
+    // On crée ou ouvre un espace de storage
+    let defaults = UserDefaults.standard
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        if let items = defaults.array(forKey: "TodoListArray") as! [String]? {
+            itemArray = items
+            print(items)
+        }
+        else {
+            print("No Item Array !!!!!!!!")
+        }
     }
     
     // MARK - TableView Datasource Methods
@@ -68,6 +80,10 @@ class TodoListViewController: UITableViewController {
             print(textField.text!)
             // On ajoute ici le nouvel item dans la liste
             self.itemArray.append(textField.text!)
+            
+            // On sauvegarde le nouveau Array en base locale
+            self.defaults.set(self.itemArray, forKey: "TodoListArray")
+            
             // et on reload pour le faire apparaitre autrement ça ne marche pas
             self.tableView.reloadData()
         }
