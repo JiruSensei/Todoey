@@ -15,7 +15,7 @@ import UIKit
 //
 class TodoListViewController: UITableViewController {
 
-    var itemArray = ["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
+    var itemArray = [Item]() //["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
     
     // On crée ou ouvre un espace de storage
     let defaults = UserDefaults.standard
@@ -23,13 +23,15 @@ class TodoListViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        if let items = defaults.array(forKey: "TodoListArray") as! [String]? {
+        itemArray.append(Item(title: "Aller EFREI"))
+        itemArray.append(Item(title: "Faire Data Model"))
+        itemArray.append(Item(title: "aller Bonita"))
+        
+        // Exemple de code où on utilisait le UserDefault pour sauvegarder la liste des itels
+        if let items = defaults.array(forKey: "TodoListArray") as? [Item] {
             itemArray = items
-            print(items)
         }
-        else {
-            print("No Item Array !!!!!!!!")
-        }
+
     }
     
     // MARK - TableView Datasource Methods
@@ -41,8 +43,9 @@ class TodoListViewController: UITableViewController {
         
         // Intéressant de noter que indexPath est une classe et pas seulement un entier
         // Il faut donc récupérer la valeur de l'index
-        cell.textLabel?.text = itemArray[indexPath.row]
-        
+        let item = itemArray[indexPath.row]
+        cell.textLabel?.text = item.title
+        cell.accessoryType = item.done ? .checkmark : .none
         return cell
     }
     
@@ -53,13 +56,12 @@ class TodoListViewController: UITableViewController {
     // MARK - Tableview Delegate Methods
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+
+        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
-        // Le concept d'accessory pour ajouter une petite icone, ici une check
-        let accessoryType = tableView.cellForRow(at: indexPath)?.accessoryType
-        switch  accessoryType {
-        case .checkmark?: tableView.cellForRow(at: indexPath)?.accessoryType = .none
-            default: tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
-        }
+        // Il faut réappeler le callback cellForRow (datasource- pour pouvoir
+        // positionner correctement les checkmark
+        tableView.reloadData()
         
         // Juste pour rendre l'affichage plus sympa
         // Quand on sélectionne la cell elle prend une autre couleur
@@ -79,7 +81,8 @@ class TodoListViewController: UITableViewController {
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             print(textField.text!)
             // On ajoute ici le nouvel item dans la liste
-            self.itemArray.append(textField.text!)
+            let newItem = Item(title: textField.text!)
+            self.itemArray.append(newItem)
             
             // On sauvegarde le nouveau Array en base locale
             self.defaults.set(self.itemArray, forKey: "TodoListArray")
