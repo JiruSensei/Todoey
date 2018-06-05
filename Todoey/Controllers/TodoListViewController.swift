@@ -16,21 +16,33 @@ import UIKit
 class TodoListViewController: UITableViewController {
 
     var itemArray = [Item]() //["Noter ratrappage", "transcrire IGN", "rdv kiné", "aller dentiste 12h30", "T° SFR"]
+    // On crée un fichier en utilisant F
+    // ileManager qui est une interface pour le système de fichier
+    // on récupère dessus le singleton "default", instance de FileManager
+    // Qui contient un certain nombre d'url organisée par directory et domainMask (le lieu dans le directory)
+    // Comme ça retourne une collection on prend le premier élément
+    // Ensuite, avec append...() on crée notre propre plist file plutôt que d'utiliser UserDefaults
+    var dataFilePath = FileManager.default.urls(for: .documentDirectory,
+                                                in: .userDomainMask).first?.appendingPathComponent("Items.plist")
     
-    // On crée ou ouvre un espace de storage
-    let defaults = UserDefaults.standard
+    // On crée ou ouvre un espace de storage (un fichier plist)
+    // let defaults = UserDefaults.standard
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        itemArray.append(Item(title: "Aller EFREI"))
-        itemArray.append(Item(title: "Faire Data Model"))
-        itemArray.append(Item(title: "aller Bonita"))
+        //print(dataFilePath)
+        
+//        itemArray.append(Item(title: "Aller EFREI"))
+//        itemArray.append(Item(title: "Faire Data Model"))
+//        itemArray.append(Item(title: "aller Bonita"))
+        
+        loadItems()
         
         // Exemple de code où on utilisait le UserDefault pour sauvegarder la liste des itels
-        if let items = defaults.array(forKey: "TodoListArray") as? [Item] {
-            itemArray = items
-        }
+//        if let items = defaults.array(forKey: "TodoListArray") as? [Item] {
+//            itemArray = items
+//        }
 
     }
     
@@ -60,8 +72,8 @@ class TodoListViewController: UITableViewController {
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
         // Il faut réappeler le callback cellForRow (datasource- pour pouvoir
-        // positionner correctement les checkmark
-        tableView.reloadData()
+        // positionner correctement les checkmark et c'est fait dans saveItems()
+        self.saveItems()
         
         // Juste pour rendre l'affichage plus sympa
         // Quand on sélectionne la cell elle prend une autre couleur
@@ -85,10 +97,9 @@ class TodoListViewController: UITableViewController {
             self.itemArray.append(newItem)
             
             // On sauvegarde le nouveau Array en base locale
-            self.defaults.set(self.itemArray, forKey: "TodoListArray")
+            // self.defaults.set(self.itemArray, forKey: "TodoListArray")            
+            self.saveItems()
             
-            // et on reload pour le faire apparaitre autrement ça ne marche pas
-            self.tableView.reloadData()
         }
         
         // On ajoute le TextField dans l'alert qui nous permettera
@@ -107,6 +118,43 @@ class TodoListViewController: UITableViewController {
         
         // On affiche le Popu avec la fonction present()
         present(alert, animated: true, completion: nil)
+    }
+    
+    //MARK - Model Manipulation methods
+    
+    // Notre méthode pour aller enregistrer les items dans la plist en utilisant
+    // PropertyListEncoder
+    func saveItems() {
+        // On crée d'abord un encoder (qui semble permettre de gérer des fichiers plist)
+        let encoder = PropertyListEncoder()
+        
+        // On va encoder ensuite notre array d'item avec cet encoder
+        // WARNING: j'ai été obligé d'ajouter Item : Encodable car ça ne compilait pas
+        do {
+            let data = try encoder.encode(itemArray)
+            try data.write(to: dataFilePath!)
+        } catch {
+            // A noter que "error" est une variable implicite
+            print("something wrong in encoding plist, \(error)")
+        }
+        // et on reload pour le faire apparaitre autrement ça ne marche pas
+        tableView.reloadData()
+    }
+    
+    func loadItems() {
+        if let data = try? Data(contentsOf: dataFilePath!) {
+            // Le pendant de la méthode saveItems, cette fois-ci on crée un Decoder pour PList
+            let decoder = PropertyListDecoder()
+            do {
+                // Il faut indiquer le type que l'on veut décoder.
+                // J'ai du mal à comprendre ce .self
+                itemArray = try decoder.decode([Item].self, from: data)
+            }
+            catch {
+                print("Error decoding, \(error)")
+            }
+            
+        }
     }
 }
 
