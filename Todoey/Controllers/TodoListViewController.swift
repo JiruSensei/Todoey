@@ -7,7 +7,7 @@
 //
 
 import UIKit
-import CoreData // en fait ça marchait sans!!!
+import RealmSwift
 
 // Le fait d'hériter de UITableViewController fait
 // qu'on n'a plus besoin de créer le TableView et
@@ -16,25 +16,18 @@ import CoreData // en fait ça marchait sans!!!
 //
 class TodoListViewController: UITableViewController {
 
-    var itemArray = [Item]()
+    var todoItems: Results<Item>?
+    let realm = try! Realm()
+    
     var selectedCategory: Category? {
         // Attention quand on utilise pas de paramètre il n'y a pas les paraenthèses
         didSet {
             loadItems()
         }
     }
-    
-    // On récupère le context de AppDelegate à partir du singleton UIApplication.shared et de sa propriété delegate
-    // Le PersistentContainer c'est la base de donnée
-    // Le context c'est le cahe (buffer) en mémoire sur lequel on travail
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Juste pour avoir l'information où se trouve nos data
-        // mais on ne récupère plus .first...
-        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
-
     }
     
     // MARK - TableView Datasource Methods
@@ -46,60 +39,79 @@ class TodoListViewController: UITableViewController {
         
         // Intéressant de noter que indexPath est une classe et pas seulement un entier
         // Il faut donc récupérer la valeur de l'index
-        let item = itemArray[indexPath.row]
-        cell.textLabel?.text = item.title
-        cell.accessoryType = item.done ? .checkmark : .none
+        if let item = todoItems?[indexPath.row] {
+            cell.textLabel?.text = item.title
+            cell.accessoryType = item.done ? .checkmark : .none
+        }
+        else {
+            cell.textLabel?.text = "No item added yet"
+        }
         return cell
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count
+        return todoItems?.count ?? 1
     }
     
     // MARK - Tableview Delegate Methods
 
+    // La méthode appelée quand on sélectionne une cellule (rangée) dans la liste
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
 
-        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
-        
-        // Pour effacer la cellule il faut supprimer l'item du tableau
-        // mais avant il faut la supprimer du context explicitement
-//        context.delete(itemArray[indexPath.row])
-//        itemArray.remove(at: indexPath.row)
-        
-        // Il faut réappeler le callback cellForRow (datasource- pour pouvoir
-        // positionner correctement les checkmark et c'est fait dans saveItems()
-        self.saveItems()
-        
-        // Juste pour rendre l'affichage plus sympa
-        // Quand on sélectionne la cell elle prend une autre couleur
-        // mais seulement un instant (flash)
-        // et retourne ensuite à la couleur originale
+        // On modifie le done de l'élément sélectionné
+        // Comme Ittem est une classe je pense que c'est une référence et du coup l'élément
+        // dans la liste Results<Item> est modifié
+        if let item = todoItems?[indexPath.row] {
+            do {
+                // Ce qui est vraiment intéressant avec Realm c'est qu'ici on fait un Update
+                // et pourtant aucune action explicite de save est faite on fait simplement
+                // toute les opération dans un bloc realm.write() {}
+                try realm.write {
+                    // On pourrait faire un delete (D de CRUD) en faisant simplement
+                    // realm.delete(item)
+                    item.done = !item.done
+                }
+            }
+            catch {
+                print("Erreur saving done status \(error)")
+            }
+        }
+        tableView.reloadData()
         tableView.deselectRow(at: indexPath, animated: true)
     }
     
     //MARK - Add Button Add
     @IBAction func addItemPressed(_ sender: UIBarButtonItem) {
         var textField = UITextField()
-        // On crée un PopUp pour pouvoir entrer le text du nouveau Item
+         //On crée un PopUp pour pouvoir entrer le text du nouveau Item
         let alert = UIAlertController(title: "Add new Item to the Todo List", message: "", preferredStyle: .alert)
-        
+
         // Le handler qui sera exécuté (tout du moins la clsure)
         // quand on presse le bouton "Add Item" dans le Popup
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             print(textField.text!)
+
+            if let currentCategory = self.selectedCategory {
+                do {
+                    try self.realm.write {
+                        let newItem = Item()
+                        newItem.title = textField.text!
+//                        newItem.dataCreated = Date()
+                        // plutôt que de positionner le parentCategory on enregistre l'item
+                        // dans la liste des items de currentCategory
+                        currentCategory.items.append(newItem)
+                    }
+                } catch {
+                    print("Error saving new item \(error)")
+                }
+            }
             
-            let newItem = Item(context: self.context)
-            newItem.title = textField.text!
-            newItem.parentCategory = self.selectedCategory
-            self.itemArray.append(newItem)
-            
-            self.saveItems()
-            
+            // et on reload pour le faire apparaitre autrement ça ne marche pas
+            self.tableView.reloadData()
         }
         
-        // On ajoute le TextField dans l'alert qui nous permettera
-        // d'entrée le titre du nouvel item
+         // On ajoute le TextField dans l'alert qui nous permettera
+         // d'entrée le titre du nouvel item
         alert.addTextField { (alertTextfield) in
             // Le placeholder est le texte grisé qui apparait dans le textfield
             // par défaut
@@ -109,9 +121,9 @@ class TodoListViewController: UITableViewController {
             textField = alertTextfield
         }
         
-        // Onenregistre l'action dans l'alert
+         // On enregistre l'action dans l'alert
         alert.addAction(action)
-        
+
         // On affiche le Popu avec la fonction present()
         present(alert, animated: true, completion: nil)
     }
@@ -123,48 +135,20 @@ class TodoListViewController: UITableViewController {
     func saveItems() {
         // On va encoder ensuite notre array d'item avec cet encoder
         // WARNING: j'ai été obligé d'ajouter Item : Encodable car ça ne compilait pas
-        do {
-            try context.save()
-        } catch {
-            print("Error saving context \(error)")
-        }
+//        do {
+//            try context.save()
+//        } catch {
+//            print("Error saving context \(error)")
+//        }
         // et on reload pour le faire apparaitre autrement ça ne marche pas
-        tableView.reloadData()
+//        tableView.reloadData()
     }
     
-    // Suite à la refactorisation on utilise, et c'est la première fois
-    // un paramètre externe
-    // Int"ressant également l'usage d'une valeur par défaut qui est faite
-    // par un appel de méthode
-    // Cette valeur par défaut est on recharge la liste à partir de la base
-    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil) {
-        // La façon de faire pour créer la requête. Ce qui est important c'est
-        // d'indiquer Item c'est à dire le type d'éléments qui sera retournée
-        // par la méthode fetch auquel on passe la requête.
+    func loadItems() {
 
-        // On ne veut retourner que les élément appartenant à la catégorie sélectionnée
-        // faire attention que on fait le "select" sur les attribut de la classe Item, donc
-        // parentCategory et non sur la var de la classe VC qui est selectedCategory
-        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
-
-        // On compbine les deux predicate potentiels (il peut y avoir en paramètre le predicate
-        // de la searchBar)
-        if let additionalPredicate = predicate {
-            let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [additionalPredicate, categoryPredicate])
-            request.predicate = compoundPredicate
-        }
-        else {
-            request.predicate = categoryPredicate
-        }
-
-        do {
-            // Donc ici on récupère un Array de Item, pas besoin de cast
-            print("on essaie de faire un fetch pour la categorie \(selectedCategory!.name!)")
-            itemArray = try context.fetch(request)
-
-        } catch {
-            print ("Erreur durant le fetch des item de la categorie \(selectedCategory!.name!) error:\(error)")
-        }
+        // On récupère le lien items de la category sélectionnée
+        // Et on le trie de façon ascendante.
+        todoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
         
         // et on réaffiche
         tableView.reloadData()
@@ -177,28 +161,16 @@ class TodoListViewController: UITableViewController {
 
 extension TodoListViewController: UISearchBarDelegate {
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        // Comme d'hab on crée une requête NSFetchRequest avec
-        // le type d'élément qu'on veut récupérer, ici Item, qui sera retourné
-        // dans un Array
-        let request: NSFetchRequest<Item> = Item.fetchRequest()
-        
-        // On crée le Predicate, sorte de requête JPQL
-        // A noter que "title" est un attribut de la classe Item
-        // Le [cd] est là pour supprimer le Case Sensitive (c) et diacretic (d) les accents
-        let searchPredicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-        //request.predicate = predicate
-        
-        // Maintenant on va trier les données retournées à l'aide d'un NSSortDescriptor
-        // Il existe plusieurs constructeur, ici on utilise celui avec une String par
-        // laquelle on indique la propriété utilisée pour le trie et un booléen pour le sens
-        let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
-        
-        // On le positionne avec un Array car c'est un Array qui est attendu
-        request.sortDescriptors = [sortDescriptor]
+        // Avec Realm on fait le filtrage directement sur le tableau (liste) en mémoire
+        // ce dernier étant map sur la base.
+        // A noter que l'argument utilise toujours NSPredicate ou son language de query (comme ici)
+        // Par contre pour le sort il suffit d'appeler une fonction chainée
+        todoItems = todoItems?
+            .filter("title CONTAINS[cd] %@", searchBar.text!)
+            .sorted(byKeyPath: "dateCreated", ascending: false)
 
-        // On execute la requête (comme précédemment)
-        loadItems(with: request, predicate: searchPredicate)
-        
+        tableView.reloadData()
+     
     }
     
     // On met cette delegate method pour pouvoir revenir à la liste une fois

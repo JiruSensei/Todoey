@@ -7,15 +7,18 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 
 class CategoryViewController: UITableViewController {
-    // Notre collection de Categories
-    var categories = [Category]()
+    // On récupère le container Realm
+    let realm = try! Realm()
     
-    // Le contexte
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
-
+    // Notre collection de Categories (anciennement [Category]())
+    // Maintenant de type Realm Results<Category>
+    var categories: Results<Category>?
+    
+    // La première chose à a faire quand l'application se lance est de charger
+    // l'ensemble des catégories présentes dans la base
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -33,14 +36,15 @@ class CategoryViewController: UITableViewController {
         
         // Intéressant de noter que indexPath est une classe et pas seulement un entier
         // Il faut donc récupérer la valeur de l'index
-        let category = categories[indexPath.row]
-        cell.textLabel?.text = category.name
+        cell.textLabel?.text = categories?[indexPath.row].name ?? "No category added yet"
         return cell
     }
     
     // Le callback qui indique le nombre de categories
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return categories.count
+        // C'est notre première utilisation de ?? The NIL Coalescing Operator
+        // Retourne la valeur 1 si l'expression est "nil"
+        return categories?.count ?? 1
     }
     
     //============================================================
@@ -51,7 +55,7 @@ class CategoryViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
         print("selected category is ")
-        print(categories[indexPath.row].name!)
+        print(categories?[indexPath.row].name ?? "pas de catégorie")
         
         // Ce que l'on veut c'est donc aller dans l'écran (TableView) de cette catégorie
         // pour ça on active la navigation "performSegue" en utilisant le "identifier"
@@ -70,16 +74,18 @@ class CategoryViewController: UITableViewController {
         // le if est ici le cas généraale où potentiellement aucune cell ne serait
         // sélectionnée mais dans notre cas en fait on est sûre
         if let indexPath = tableView.indexPathForSelectedRow {
-            destinationVC.selectedCategory = categories[indexPath.row]
+            destinationVC.selectedCategory = categories?[indexPath.row]
         }
     }
     
     //============================================================
     //MARK: - Data Manipulation (CRUD)
     //On appel just la méthode save() sur le contexte
-    func saveCategories() {
+    func save(category: Category) {
         do {
-            try context.save()
+            try realm.write {
+                realm.add(category)
+            }
         } catch {
             print("Error saving categories \(error)")
         }
@@ -87,15 +93,14 @@ class CategoryViewController: UITableViewController {
         tableView.reloadData()
     }
     
-    //On récupère la request et appel la méthode fetch()
+    // C'est le FETCH    //On récupère la request et appel la méthode fetch()
     //IMPORTANT - Le type paramétré est le type qui sera retourné par la requête
-    func loadCategories(with request: NSFetchRequest<Category> = Category.fetchRequest()) {
-        do {
-            // Donc ici on récupère un Array de Category, pas besoin de cast
-            categories = try context.fetch(request)
-        } catch {
-            print ("Erreur durant le fetch des categories \(error)")
-        }
+    func loadCategories() {
+        // On récupère tous les objets de type Category
+        // Là aussi pour indiquer le type Category on écrit Category.self
+        // Le type de retour est Result<Category> qui est un container Realm
+        categories = realm.objects(Category.self)
+        
         // et on réaffiche
         tableView.reloadData()
     }
@@ -110,11 +115,12 @@ class CategoryViewController: UITableViewController {
         // Cet handler qui sera exécuté (tout du moins la closure)
         // quand on presse le bouton "Add Item" dans le Popup
         let action = UIAlertAction(title: "Add Category", style: .default) { (action) in
-            let newCategory = Category(context: self.context)
+            let newCategory = Category()
             newCategory.name = textField.text!
-            self.categories.append(newCategory)
+            // On n'est plus obligé car maintenant categorie est Result qui est auto update
+            //self.categories.append(newCategory)
             
-            self.saveCategories()
+            self.save(category: newCategory)
             
         }
         
